@@ -20,78 +20,69 @@ Linkerd can do.
 
 Installing Linkerd is easy. First, you will install the CLI (command-line
 interface) onto your local machine. Using this CLI, you'll then install the
-*control plane* into your Kubernetes cluster. Finally, you'll "mesh" one or
-more services by adding the *data plane* proxies. (See the
-[Architecture](../architecture/) page for details.)
+*control plane* onto your Kubernetes cluster. Finally, you'll "mesh" one or
+more of your own services by adding Linkerd's *data plane* to them.
 
 ## Step 0: Setup
 
-Before we can do anything, we need to ensure you have access to a Kubernetes
-cluster running 1.13 or later, and a functioning `kubectl` command on your
-local machine. (One easy option is to run Kubernetes on your local machine. We
-suggest [Docker Desktop](https://www.docker.com/products/docker-desktop) or
-[Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/), but
-[there are many options](https://kubernetes.io/docs/setup/).)
+Before we can do anything, we need to ensure you have access to modern
+Kubernetes cluster and a functioning `kubectl` command on your local machine.
+(If you don't already have a Kubernetes cluster, one easy option is to run one
+on your local machine. There are many ways to do this, including
+[kind](https://kind.sigs.k8s.io/), [k3d](https://k3d.io/), [Docker for
+Desktop](https://www.docker.com/products/docker-desktop), [and
+more](https://kubernetes.io/docs/setup/).)
 
-When ready, make sure you're running a recent version of Kubernetes with:
+You can validate your setup by running:
 
 ```bash
 kubectl version --short
 ```
 
-In the next step, we will install the Linkerd CLI and validate that your cluster
-is ready to install the control plane.
+You should see output with both a `Client Version` and `Server Version`
+component.
 
-(Note: if you're using a GKE with a "private cluster", there are some [extra
-steps required](/2/reference/cluster-configuration/#private-clusters) before
-you can proceed.)
+Now that we have our cluster, we'll install the Linkerd CLI and use it validate
+that your cluster is capable of hosting the Linkerd control plane.
+
+(Note: if you're using a GKE "private cluster", there are some [extra steps
+required](/2/reference/cluster-configuration/#private-clusters) before you can
+proceed to the next step.)
 
 ## Step 1: Install the CLI
 
 If this is your first time running Linkerd, you will need to download the
-command-line interface (CLI) onto your local machine. This CLI interacts with
-Linkerd, including installing the control plane onto your Kubernetes cluster.
+`linkerd` command-line interface (CLI) onto your local machine. The CLI will
+allow you to interact with your Linkerd deployment.
 
 To install the CLI manually, run:
 
 ```bash
-curl -sL https://run.linkerd.io/install | sh
+curl -sL run.linkerd.io/install | sh
 ```
 
-Alternatively, you can download the CLI directly via the
+Be sure to follow the instructions to add it to your path.
+
+Alternatively, if you use [Homebrew](https://brew.sh), you can install the CLI
+with `brew install linkerd`. You can also download the CLI directly via the
 [Linkerd releases page](https://github.com/linkerd/linkerd2/releases/).
 
-Next, add `linkerd` to your path with:
-
-```bash
-export PATH=$PATH:$HOME/.linkerd2/bin
-```
-
-If you use [Homebrew](https://brew.sh), you can instead download and install the
-CLI with:
-
-```bash
-brew install linkerd
-```
-
-However you install it, you can verify the CLI is running correctly with:
+Once installed, verify the CLI is running correctly with:
 
 ```bash
 linkerd version
 ```
 
 You should see the CLI version, and also `Server version: unavailable`. This is
-because you haven't installed the control plane on your cluster. Don't worry,
-you'll be installing the control plane soon.
+because you haven't installed the control plane on your cluster. Don't
+worry&mdash;we'll fix that soon enough.
 
 ## Step 2: Validate your Kubernetes cluster
 
-Kubernetes clusters can be configured in many different ways. To ensure that the
-control plane will install correctly, the Linkerd CLI can check and validate
-that everything is configured correctly.
-
-To check that your cluster is configured correctly and ready to install the
-control plane, you can run:
+Kubernetes clusters can be configured in many different ways. Before we can
+install the Linkerd control plane, we need to check and validate that
+everything is configured correctly. To check that your cluster is ready to
+install Linkerd, run:
 
 ```bash
 linkerd check --pre
@@ -100,55 +91,82 @@ linkerd check --pre
 If there are any checks that do not pass, make sure to follow the provided links
 and fix those issues before proceeding.
 
-## Step 3: Install Linkerd onto the cluster
+## Step 3: Install the control plane onto your cluster
 
 Now that you have the CLI running locally and a cluster that is ready to go,
-it's time to install the control plane into its own namespace (by default,
-`linkerd`). To do this, run:
+it's time to install the control plane.
+
+The first step is to install the control plane core. To do this, run:
 
 ```bash
 linkerd install | kubectl apply -f -
 ```
 
-The `linkerd install` command generates a Kubernetes manifest with all the
-necessary control plane resources. (You can inspect the output if desired!).
-Piping this manifest into `kubectl apply` will instruct Kubernetes to
+In this command, the `linkerd install` command generates a Kubernetes manifest
+with all the necessary control plane resources. (Feel free to inspect the
+output.) Piping this manifest into `kubectl apply` then instructs Kubernetes to
 add those resources to your cluster.
 
-Depending on the speed of your cluster's Internet connection, it may take a
-minute or two for your cluster to pull the Linkerd images. While that is
-happening, we can validate the installation by running:
+{{< note >}}
+Some control plane resources require cluster-wide permissions. If you are
+installing on a cluster where these permissions are restricted, you may prefer
+the alternative [multi-stage install](/2/tasks/install/#multi-stage-install)
+process, which will split these "sensitive" components into a separate,
+self-contained step which can be handed off to another party.
+{{< /note >}}
+
+Now let's wait for the control plane to finish installing. Depending on the
+speed of your cluster's Internet connection, this may take a minute or two.
+Wait for the control plane to be ready (and verify your installation) by
+running:
 
 ```bash
 linkerd check
 ```
 
-This command will patiently wait until Linkerd has been installed, is running
-and becomes healthy. If you're interested in what components were installed,
-you can run:
+Next, we'll install some *extensions*. Extensions add non-critical but often
+useful functionality to Linkerd. For this guide, we need the **viz** extension,
+which will install Prometheus, dashboard, and metrics components onto the
+cluster:
 
 ```bash
-kubectl -n linkerd get deploy
+linkerd viz install | kubectl apply -f - # on-cluster metrics stack
 ```
 
-Check out the [architecture](/2/reference/architecture/#control-plane)
-documentation for an in depth explanation of what these components are and what
-they do.
+Optionally, at this point you can install other extensions. For example:
 
-{{< note >}}
-Linkerd installs certain resources that require cluster-wide permissions. For
-clusters where these permissions are restricted, the alternative [multi-stage
-install](/2/tasks/install/#multi-stage-install) instructions, which split these
-requirements into a separate, self-contained step, may be useful.
-{{< /note >}}
+```bash
+## optional
+linkerd jaeger install | kubectl apply -f - # Jaeger collector and UI
+linkerd multicluster install | kubectl apply -f - # multi-cluster components
+```
+
+Note that extensions can also come from third-party sources. For example,
+[Buoyant Cloud](https://buoyant.io/cloud) is a free, hosted metrics dashboard
+for Linkerd that can be installed alongside `viz`, but doesn't require it:
+
+```bash
+## optional
+curl -sL buoyant.cloud/install | sh
+linkerd buoyant install | kubectl apply -f - # hosted metrics dashboard
+```
+
+Once you've installed the **viz** extension and any other extensions you'd
+like, we'll validate everything again:
+
+```bash
+linkerd check
+```
+
+Assuming everything is green, we're ready for the next step!
 
 ## Step 4: Explore Linkerd
 
-With the control plane installed and running, you can now view the Linkerd
-dashboard by running:
+With the control plane and extensions installed and running, you can now view
+the Linkerd dashboard by running:
 
 ```bash
-linkerd dashboard &
+linkerd viz dashboard &
 ```
 
 {{< fig src="/images/getting-started/empty-dashboard.png"
@@ -164,7 +182,7 @@ to dig into what is going on with the control plane itself behind the scenes.
 In fact, you can run:
 
 ```bash
-linkerd -n linkerd top deploy/linkerd-web
+linkerd -n linkerd viz top deploy/linkerd-web
 ```
 
 This is the traffic you're generating by looking at the dashboard itself!
@@ -236,7 +254,7 @@ app.  Since the demo app comes with a load generator, we can see live traffic
 metrics by running:
 
 ```bash
-linkerd -n emojivoto stat deploy
+linkerd -n emojivoto viz stat deploy
 ```
 
 This will show the "golden" metrics for each deployment:
@@ -249,14 +267,14 @@ To dig in a little further, it is possible to use `top` to get a real-time
 view of which paths are being called:
 
 ```bash
-linkerd -n emojivoto top deploy
+linkerd -n emojivoto viz top deploy
 ```
 
 To go even deeper, we can use `tap` shows the stream of requests across a
 single pod, deployment, or even everything in the emojivoto namespace:
 
 ```bash
-linkerd -n emojivoto tap deploy/web
+linkerd -n emojivoto viz tap deploy/web
 ```
 
 All of this functionality is also available in the dashboard, if you would like
