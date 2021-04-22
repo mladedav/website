@@ -65,6 +65,12 @@ AnnotationsReference:
     receiving SIGTERM signal from Kubernetes but no longer than pod's `terminationGracePeriodSeconds`.
     If not provided, it will be defaulted to `0`
   Name: config.alpha.linkerd.io/proxy-wait-before-exit-seconds
+- Description: The application container will not start until the proxy is ready;
+    accepted values are `enabled` and `disabled`
+  Name: config.linkerd.io/proxy-await
+- Description: Sets nf_conntrack_tcp_timeout_close_wait. Accepts a duration string,
+    e.g. `1m` or `3600s`
+  Name: config.linkerd.io/close-wait-timeout
 CLIReference:
 - Description: |-
     Check the Linkerd cluster-wide resources for potential problems.
